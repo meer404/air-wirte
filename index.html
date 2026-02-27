@@ -19,7 +19,7 @@
   --ink:#00f5d4;--bg:#0b0b16;--panel:#12122a;--panel2:#1a1a35;
   --accent:#f72585;--accent2:#7b2fff;--text:#e0e0ff;--text2:#8888aa;
   --border:#ffffff12;--glow:0 0 20px #00f5d480;--radius:8px;
-  --sidebar-w:56px;--topbar-h:44px;--rightpanel-w:260px;
+  --sidebar-w:260px;--topbar-h:44px;--rightpanel-w:0px;
   --transition:all .2s ease;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter','Noto Naskh Arabic',sans-serif;}
@@ -30,10 +30,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 ::-webkit-scrollbar-thumb{background:#ffffff20;border-radius:10px;}
 
 /* ═══════════════════ LAYOUT ═══════════════════ */
-.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr var(--rightpanel-w);grid-template-rows:var(--topbar-h) 1fr 28px;height:100vh;width:100vw;}
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--topbar-h) 1fr 28px;height:100vh;width:100vw;}
 
 /* ═══════════════════ TOPBAR ═══════════════════ */
-.topbar{grid-column:1/-1;display:flex;align-items:center;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--border);gap:4px;z-index:300;}
+.topbar{position:relative;grid-column:1/-1;display:flex;align-items:center;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--border);gap:4px;z-index:300;}
 
 /* Header color & size controls */
 .tb-color-row{display:flex;align-items:center;gap:4px;}
@@ -61,15 +61,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 .zoom-display{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:2px 8px;font-size:.72rem;color:var(--ink);min-width:50px;text-align:center;cursor:pointer;}
 
-/* ═══════════════════ SIDEBAR (TOOLS) ═══════════════════ */
-.sidebar{grid-row:2/3;display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;background:var(--panel);border-left:1px solid var(--border);z-index:50;overflow-y:auto;}
+/* ═══════════════════ SIDEBAR (TOOLS + PANELS) ═══════════════════ */
+.sidebar{position:relative;grid-row:2/3;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--border);z-index:250;overflow-y:auto;overflow-x:hidden;}
 
-.tool-btn{width:40px;height:40px;border-radius:var(--radius);background:none;border:none;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;transition:var(--transition);position:relative;}
+/* Toolbar strip at top of sidebar */
+.sidebar-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;padding:6px 4px;gap:2px;border-bottom:1px solid var(--border);flex-shrink:0;}
+
+/* Panels area below tools */
+.sidebar-panels{flex:1;overflow-y:auto;overflow-x:hidden;}
+
+.tool-btn{width:34px;height:34px;border-radius:var(--radius);background:none;border:none;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:var(--transition);position:relative;flex-shrink:0;}
 .tool-btn:hover{background:#ffffff10;color:var(--text);}
 .tool-btn.active{background:#00f5d415;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink);}
-.tool-btn .tooltip{position:absolute;right:calc(100% + 8px);background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;font-size:.7rem;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:999;}
+.tool-btn .tooltip{position:absolute;left:calc(100% + 8px);background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;font-size:.7rem;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:999;}
 .tool-btn:hover .tooltip{opacity:1;}
-.sidebar-divider{width:28px;height:1px;background:var(--border);margin:4px 0;}
+.sidebar-divider{width:1px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0;}
+
+/* Sidebar toggle button */
+.sidebar-toggle{position:absolute;top:50%;left:calc(100%);transform:translateY(-50%);width:18px;height:48px;background:var(--panel);border:1px solid var(--border);border-right:none;border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:.65rem;z-index:251;transition:var(--transition);}
+.sidebar-toggle:hover{color:var(--ink);background:var(--panel2);}
+.app.sidebar-collapsed .sidebar{width:0;min-width:0;overflow:hidden;border:none;}
+.app.sidebar-collapsed{grid-template-columns:0 1fr;}
+.app.sidebar-collapsed .sidebar-toggle{left:0;border-radius:0 6px 6px 0;border-left:none;}
 
 /* ═══════════════════ CANVAS AREA ═══════════════════ */
 .canvas-area{position:relative;overflow:hidden;background:var(--bg);cursor:crosshair;}
@@ -91,7 +104,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #gridCanvas{z-index:2;}
 #videoElement{position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;opacity:0;transform:scaleX(-1);z-index:200;pointer-events:none;transition:opacity .3s;}
 #videoElement.visible{opacity:1;}
-#handCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:202;pointer-events:none;transform:scaleX(-1);}
+#handCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:204;pointer-events:none;transform:scaleX(-1);}
 #handCanvas:not(.cam-active){position:absolute;width:100%;height:100%;}
 
 /* Full-screen camera drawing overlay */
@@ -101,8 +114,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 /* Cursor preview */
 .cursor-preview{position:fixed;pointer-events:none;z-index:1000;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);transform:translate(-50%,-50%);display:none;}
 
-/* ═══════════════════ RIGHT PANEL ═══════════════════ */
-.right-panel{grid-row:2/3;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--border);overflow-y:auto;z-index:50;}
+/* ═══════════════════ RIGHT PANEL (now in sidebar) ═══════════════════ */
 
 .panel-section{border-bottom:1px solid var(--border);padding:10px;}
 .panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;}
@@ -174,7 +186,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .history-item.future{opacity:.35;}
 
 /* ═══════════════════ STATUSBAR ═══════════════════ */
-.statusbar{grid-column:1/-1;display:flex;align-items:center;padding:0 12px;background:var(--panel);border-top:1px solid var(--border);font-size:.68rem;color:var(--text2);gap:16px;z-index:100;}
+.statusbar{position:relative;grid-column:1/-1;display:flex;align-items:center;padding:0 12px;background:var(--panel);border-top:1px solid var(--border);font-size:.68rem;color:var(--text2);gap:16px;z-index:250;}
 .statusbar .dot{width:6px;height:6px;border-radius:50%;background:#555;transition:background .2s;}
 .statusbar .dot.active{background:var(--ink);box-shadow:0 0 8px var(--ink);}
 .statusbar .dot.drawing{background:var(--accent);box-shadow:0 0 8px var(--accent);}
@@ -216,14 +228,33 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .shortcuts-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:.75rem;}
 .shortcuts-grid .key{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:.68rem;color:var(--ink);font-family:'Inter',monospace;}
 
+/* ═══════════════════ FULLSCREEN MODE ═══════════════════ */
+.app.fullscreen .topbar{display:none;}
+.app.fullscreen .sidebar{display:none;}
+.app.fullscreen .statusbar{display:none;}
+.app.fullscreen{grid-template-columns:0 1fr;grid-template-rows:0 1fr 0;}
+.app.fullscreen .canvas-area{cursor:crosshair;}
+.app.fullscreen .sidebar-toggle{display:none;}
+
+/* Fullscreen exit button */
+.fs-exit-btn{position:fixed;top:10px;left:10px;z-index:9998;background:rgba(18,18,42,.85);border:1px solid var(--border);color:var(--ink);width:40px;height:40px;border-radius:8px;cursor:pointer;font-size:1.2rem;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);transition:all .2s;}
+.fs-exit-btn:hover{background:rgba(0,245,212,.15);transform:scale(1.1);}
+.app.fullscreen~.fs-exit-btn{display:flex;}
+
 /* ═══════════════════ RESPONSIVE ═══════════════════ */
 @media(max-width:900px){
-  :root{--rightpanel-w:0px;--sidebar-w:44px;}
-  .right-panel{display:none;}
+  :root{--sidebar-w:220px;}
+}
+@media(max-width:600px){
+  .app.sidebar-collapsed{grid-template-columns:0 1fr;}
+  :root{--sidebar-w:200px;}
 }
 </style>
 </head>
 <body>
+
+<!-- Fullscreen exit button -->
+<button class="fs-exit-btn" id="fsExitBtn" title="Exit Fullscreen (F11 / Esc)" onclick="toggleFullscreen()">✕</button>
 
 <!-- ═══════════ START OVERLAY ═══════════ -->
 <div class="overlay-start" id="startOverlay">
@@ -317,62 +348,190 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <button class="tb-btn" title="Export (Ctrl+Shift+S)" onclick="showExportModal()">💾</button>
       <button class="tb-btn" title="Import Image" onclick="importImage()">📥</button>
       <button class="tb-btn" title="Keyboard Shortcuts (?)" onclick="showShortcutsModal()">⌨</button>
+      <button class="tb-btn" id="btnFullscreen" title="Fullscreen (F11)" onclick="toggleFullscreen()">⛶</button>
     </div>
   </div>
 
-  <!-- SIDEBAR (Tools) -->
+  <!-- SIDEBAR (Tools + Panels) -->
   <div class="sidebar">
-    <button class="tool-btn active" data-tool="brush" onclick="setTool('brush')">
-      🖌<span class="tooltip">Brush (B)</span>
-    </button>
-    <button class="tool-btn" data-tool="pencil" onclick="setTool('pencil')">
-      ✏<span class="tooltip">Pencil (P)</span>
-    </button>
-    <button class="tool-btn" data-tool="marker" onclick="setTool('marker')">
-      🖊<span class="tooltip">Marker (M)</span>
-    </button>
-    <button class="tool-btn" data-tool="spray" onclick="setTool('spray')">
-      💨<span class="tooltip">Spray (A)</span>
-    </button>
-    <button class="tool-btn" data-tool="neon" onclick="setTool('neon')">
-      💡<span class="tooltip">Neon Glow (N)</span>
-    </button>
-    <button class="tool-btn" data-tool="calligraphy" onclick="setTool('calligraphy')">
-      🪶<span class="tooltip">Calligraphy (C)</span>
-    </button>
-    <div class="sidebar-divider"></div>
-    <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')">
-      🧹<span class="tooltip">Eraser (E)</span>
-    </button>
-    <button class="tool-btn" data-tool="fill" onclick="setTool('fill')">
-      🪣<span class="tooltip">Fill (F)</span>
-    </button>
-    <div class="sidebar-divider"></div>
-    <button class="tool-btn" data-tool="line" onclick="setTool('line')">
-      ╱<span class="tooltip">Line (L)</span>
-    </button>
-    <button class="tool-btn" data-tool="rect" onclick="setTool('rect')">
-      ▭<span class="tooltip">Rectangle (R)</span>
-    </button>
-    <button class="tool-btn" data-tool="circle" onclick="setTool('circle')">
-      ◯<span class="tooltip">Circle (O)</span>
-    </button>
-    <button class="tool-btn" data-tool="arrow" onclick="setTool('arrow')">
-      ➤<span class="tooltip">Arrow</span>
-    </button>
-    <div class="sidebar-divider"></div>
-    <button class="tool-btn" data-tool="text" onclick="setTool('text')">
-      T<span class="tooltip">Text (T)</span>
-    </button>
-    <button class="tool-btn" data-tool="eyedrop" onclick="setTool('eyedrop')">
-      💧<span class="tooltip">Eyedropper (I)</span>
-    </button>
-    <button class="tool-btn" data-tool="move" onclick="setTool('move')">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,9 2,12 5,15"/><polyline points="9,5 12,2 15,5"/><polyline points="15,19 12,22 9,19"/><polyline points="19,9 22,12 19,15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg><span class="tooltip">Move (V)</span>
-    </button>
-    <button class="tool-btn" data-tool="pan" onclick="setTool('pan')">
-      🤚<span class="tooltip">Pan (H / Space)</span>
-    </button>
+    <div class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Sidebar">◀</div>
+    <div class="sidebar-tools">
+      <button class="tool-btn active" data-tool="brush" onclick="setTool('brush')">
+        🖌<span class="tooltip">Brush (B)</span>
+      </button>
+      <button class="tool-btn" data-tool="pencil" onclick="setTool('pencil')">
+        ✏<span class="tooltip">Pencil (P)</span>
+      </button>
+      <button class="tool-btn" data-tool="marker" onclick="setTool('marker')">
+        🖊<span class="tooltip">Marker (M)</span>
+      </button>
+      <button class="tool-btn" data-tool="spray" onclick="setTool('spray')">
+        💨<span class="tooltip">Spray (A)</span>
+      </button>
+      <button class="tool-btn" data-tool="neon" onclick="setTool('neon')">
+        💡<span class="tooltip">Neon Glow (N)</span>
+      </button>
+      <button class="tool-btn" data-tool="calligraphy" onclick="setTool('calligraphy')">
+        🪶<span class="tooltip">Calligraphy (C)</span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')">
+        🧹<span class="tooltip">Eraser (E)</span>
+      </button>
+      <button class="tool-btn" data-tool="fill" onclick="setTool('fill')">
+        🪣<span class="tooltip">Fill (F)</span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="tool-btn" data-tool="line" onclick="setTool('line')">
+        ╱<span class="tooltip">Line (L)</span>
+      </button>
+      <button class="tool-btn" data-tool="rect" onclick="setTool('rect')">
+        ▭<span class="tooltip">Rectangle (R)</span>
+      </button>
+      <button class="tool-btn" data-tool="circle" onclick="setTool('circle')">
+        ◯<span class="tooltip">Circle (O)</span>
+      </button>
+      <button class="tool-btn" data-tool="arrow" onclick="setTool('arrow')">
+        ➤<span class="tooltip">Arrow</span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="tool-btn" data-tool="text" onclick="setTool('text')">
+        T<span class="tooltip">Text (T)</span>
+      </button>
+      <button class="tool-btn" data-tool="eyedrop" onclick="setTool('eyedrop')">
+        💧<span class="tooltip">Eyedropper (I)</span>
+      </button>
+      <button class="tool-btn" data-tool="move" onclick="setTool('move')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,9 2,12 5,15"/><polyline points="9,5 12,2 15,5"/><polyline points="15,19 12,22 9,19"/><polyline points="19,9 22,12 19,15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg><span class="tooltip">Move (V)</span>
+      </button>
+      <button class="tool-btn" data-tool="pan" onclick="setTool('pan')">
+        🤚<span class="tooltip">Pan (H / Space)</span>
+      </button>
+    </div>
+
+    <div class="sidebar-panels">
+      <!-- COLOR PICKER -->
+      <div class="panel-section" id="colorSection">
+        <div class="panel-header" onclick="toggleSection('colorSection')">
+          <h3>🎨 ڕەنگ</h3><span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body">
+          <div class="color-main">
+            <div class="color-preview-box" id="colorPreviewBox">
+              <div class="color-fg" id="colorFg" style="background:#00f5d4;"></div>
+              <div class="color-bg-preview" id="colorBgPrev" style="background:#111122;"></div>
+              <div class="color-swap" onclick="swapColors()">⇄</div>
+            </div>
+            <div style="flex:1;">
+              <div class="color-spectrum" id="spectrumBox">
+                <canvas id="spectrumCanvas"></canvas>
+                <div class="spectrum-cursor" id="spectrumCursor"></div>
+              </div>
+              <div class="hue-bar" id="hueBar">
+                <canvas id="hueCanvas"></canvas>
+                <div class="hue-cursor" id="hueCursor"></div>
+              </div>
+              <div class="alpha-bar" id="alphaBar">
+                <canvas id="alphaCanvas"></canvas>
+                <div class="alpha-cursor" id="alphaCursor" style="left:100%;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="color-input-row">
+            <label>#</label>
+            <input type="text" id="hexInput" value="00f5d4" maxlength="8" oninput="hexInputChange()">
+            <label style="min-width:30px;">A:</label>
+            <input type="text" id="alphaInput" value="100" style="width:40px;" oninput="alphaInputChange()">
+            <label>%</label>
+          </div>
+          <div class="color-swatches" id="colorSwatches"></div>
+        </div>
+      </div>
+
+      <!-- BRUSH SETTINGS -->
+      <div class="panel-section brush-settings" id="brushSection">
+        <div class="panel-header" onclick="toggleSection('brushSection')">
+          <h3>🖌 ئامراز</h3><span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body">
+          <div class="slider-row">
+            <label>قەبارە</label>
+            <input type="range" id="sizeSlider" min="1" max="100" value="8" oninput="updateBrushSetting()">
+            <span class="val" id="sizeVal">8</span>
+          </div>
+          <div class="slider-row">
+            <label>نەرمی</label>
+            <input type="range" id="softnessSlider" min="0" max="100" value="0" oninput="updateBrushSetting()">
+            <span class="val" id="softnessVal">0</span>
+          </div>
+          <div class="slider-row">
+            <label>ئاستەنگی</label>
+            <input type="range" id="stabilizeSlider" min="0" max="20" value="3" oninput="updateBrushSetting()">
+            <span class="val" id="stabilizeVal">3</span>
+          </div>
+          <div class="slider-row">
+            <label>تیرەیی</label>
+            <input type="range" id="flowSlider" min="1" max="100" value="100" oninput="updateBrushSetting()">
+            <span class="val" id="flowVal">100</span>
+          </div>
+          <div class="brush-preview-container">
+            <canvas class="brush-preview-canvas" id="brushPreview" width="180" height="50"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYERS -->
+      <div class="panel-section layers-panel" id="layersSection">
+        <div class="panel-header" onclick="toggleSection('layersSection')">
+          <h3>📑 چینەکان</h3><span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body">
+          <div class="layer-actions">
+            <button class="layer-action-btn" onclick="addLayer()">+ زیاد</button>
+            <button class="layer-action-btn" onclick="duplicateLayer()">⧉ کۆپی</button>
+            <button class="layer-action-btn" onclick="mergeDown()">⤓ تێکەڵ</button>
+            <button class="layer-action-btn" onclick="deleteLayer()">🗑</button>
+          </div>
+          <div class="layer-list" id="layerList"></div>
+          <div class="layer-opacity-slider" style="margin-top:6px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <label style="font-size:.7rem;color:var(--text2);">تیرەیی:</label>
+              <input type="range" id="layerOpacity" min="0" max="100" value="100" oninput="changeLayerOpacity(this.value)" style="flex:1;">
+              <span style="font-size:.65rem;color:var(--ink);" id="layerOpacityVal">100%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+              <label style="font-size:.7rem;color:var(--text2);">مۆد:</label>
+              <select class="tb-select" id="blendMode" onchange="changeBlendMode(this.value)" style="flex:1;">
+                <option value="source-over">Normal</option>
+                <option value="multiply">Multiply</option>
+                <option value="screen">Screen</option>
+                <option value="overlay">Overlay</option>
+                <option value="darken">Darken</option>
+                <option value="lighten">Lighten</option>
+                <option value="color-dodge">Color Dodge</option>
+                <option value="color-burn">Color Burn</option>
+                <option value="hard-light">Hard Light</option>
+                <option value="soft-light">Soft Light</option>
+                <option value="difference">Difference</option>
+                <option value="hue">Hue</option>
+                <option value="saturation">Saturation</option>
+                <option value="luminosity">Luminosity</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="panel-section" id="historySection">
+        <div class="panel-header" onclick="toggleSection('historySection')">
+          <h3>📜 مێژوو</h3><span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body">
+          <div class="history-list" id="historyList"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- CANVAS AREA -->
@@ -387,133 +546,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   <!-- Full-screen camera layer (outside grid) -->
   <video id="videoElement" autoplay playsinline muted></video>
   <canvas id="camDrawCanvas" class="cam-draw-overlay"></canvas>
-  <canvas id="handCanvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:202;pointer-events:none;transform:scaleX(-1);display:none;"></canvas>
-
-  <!-- RIGHT PANEL -->
-  <div class="right-panel">
-
-    <!-- COLOR PICKER -->
-    <div class="panel-section" id="colorSection">
-      <div class="panel-header" onclick="toggleSection('colorSection')">
-        <h3>🎨 ڕەنگ</h3><span class="toggle-icon">▼</span>
-      </div>
-      <div class="panel-body">
-        <div class="color-main">
-          <div class="color-preview-box" id="colorPreviewBox">
-            <div class="color-fg" id="colorFg" style="background:#00f5d4;"></div>
-            <div class="color-bg-preview" id="colorBgPrev" style="background:#111122;"></div>
-            <div class="color-swap" onclick="swapColors()">⇄</div>
-          </div>
-          <div style="flex:1;">
-            <div class="color-spectrum" id="spectrumBox">
-              <canvas id="spectrumCanvas"></canvas>
-              <div class="spectrum-cursor" id="spectrumCursor"></div>
-            </div>
-            <div class="hue-bar" id="hueBar">
-              <canvas id="hueCanvas"></canvas>
-              <div class="hue-cursor" id="hueCursor"></div>
-            </div>
-            <div class="alpha-bar" id="alphaBar">
-              <canvas id="alphaCanvas"></canvas>
-              <div class="alpha-cursor" id="alphaCursor" style="left:100%;"></div>
-            </div>
-          </div>
-        </div>
-        <div class="color-input-row">
-          <label>#</label>
-          <input type="text" id="hexInput" value="00f5d4" maxlength="8" oninput="hexInputChange()">
-          <label style="min-width:30px;">A:</label>
-          <input type="text" id="alphaInput" value="100" style="width:40px;" oninput="alphaInputChange()">
-          <label>%</label>
-        </div>
-        <div class="color-swatches" id="colorSwatches"></div>
-      </div>
-    </div>
-
-    <!-- BRUSH SETTINGS -->
-    <div class="panel-section brush-settings" id="brushSection">
-      <div class="panel-header" onclick="toggleSection('brushSection')">
-        <h3>🖌 ئامراز</h3><span class="toggle-icon">▼</span>
-      </div>
-      <div class="panel-body">
-        <div class="slider-row">
-          <label>قەبارە</label>
-          <input type="range" id="sizeSlider" min="1" max="100" value="8" oninput="updateBrushSetting()">
-          <span class="val" id="sizeVal">8</span>
-        </div>
-        <div class="slider-row">
-          <label>نەرمی</label>
-          <input type="range" id="softnessSlider" min="0" max="100" value="0" oninput="updateBrushSetting()">
-          <span class="val" id="softnessVal">0</span>
-        </div>
-        <div class="slider-row">
-          <label>ئاستەنگی</label>
-          <input type="range" id="stabilizeSlider" min="0" max="20" value="3" oninput="updateBrushSetting()">
-          <span class="val" id="stabilizeVal">3</span>
-        </div>
-        <div class="slider-row">
-          <label>تیرەیی</label>
-          <input type="range" id="flowSlider" min="1" max="100" value="100" oninput="updateBrushSetting()">
-          <span class="val" id="flowVal">100</span>
-        </div>
-        <div class="brush-preview-container">
-          <canvas class="brush-preview-canvas" id="brushPreview" width="180" height="50"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- LAYERS -->
-    <div class="panel-section layers-panel" id="layersSection">
-      <div class="panel-header" onclick="toggleSection('layersSection')">
-        <h3>📑 چینەکان</h3><span class="toggle-icon">▼</span>
-      </div>
-      <div class="panel-body">
-        <div class="layer-actions">
-          <button class="layer-action-btn" onclick="addLayer()">+ زیاد</button>
-          <button class="layer-action-btn" onclick="duplicateLayer()">⧉ کۆپی</button>
-          <button class="layer-action-btn" onclick="mergeDown()">⤓ تێکەڵ</button>
-          <button class="layer-action-btn" onclick="deleteLayer()">🗑</button>
-        </div>
-        <div class="layer-list" id="layerList"></div>
-        <div class="layer-opacity-slider" style="margin-top:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <label style="font-size:.7rem;color:var(--text2);">تیرەیی:</label>
-            <input type="range" id="layerOpacity" min="0" max="100" value="100" oninput="changeLayerOpacity(this.value)" style="flex:1;">
-            <span style="font-size:.65rem;color:var(--ink);" id="layerOpacityVal">100%</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-            <label style="font-size:.7rem;color:var(--text2);">مۆد:</label>
-            <select class="tb-select" id="blendMode" onchange="changeBlendMode(this.value)" style="flex:1;">
-              <option value="source-over">Normal</option>
-              <option value="multiply">Multiply</option>
-              <option value="screen">Screen</option>
-              <option value="overlay">Overlay</option>
-              <option value="darken">Darken</option>
-              <option value="lighten">Lighten</option>
-              <option value="color-dodge">Color Dodge</option>
-              <option value="color-burn">Color Burn</option>
-              <option value="hard-light">Hard Light</option>
-              <option value="soft-light">Soft Light</option>
-              <option value="difference">Difference</option>
-              <option value="hue">Hue</option>
-              <option value="saturation">Saturation</option>
-              <option value="luminosity">Luminosity</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- HISTORY -->
-    <div class="panel-section" id="historySection">
-      <div class="panel-header" onclick="toggleSection('historySection')">
-        <h3>📜 مێژوو</h3><span class="toggle-icon">▼</span>
-      </div>
-      <div class="panel-body">
-        <div class="history-list" id="historyList"></div>
-      </div>
-    </div>
-  </div>
+  <canvas id="camGridCanvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:203;pointer-events:none;display:none;"></canvas>
+  <canvas id="handCanvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:204;pointer-events:none;transform:scaleX(-1);display:none;"></canvas>
 
   <!-- STATUS BAR -->
   <div class="statusbar">
@@ -1637,10 +1671,30 @@ function fitToScreen() {
   const r = canvasArea.getBoundingClientRect();
   const sx = (r.width - 40) / mainCanvas.width;
   const sy = (r.height - 40) / mainCanvas.height;
-  state.zoom = Math.min(sx, sy, 1);
+  state.zoom = Math.min(sx, sy);
   state.panX = (r.width - mainCanvas.width * state.zoom) / 2;
   state.panY = (r.height - mainCanvas.height * state.zoom) / 2;
   updateTransform();
+}
+
+function toggleFullscreen() {
+  const app = document.querySelector('.app');
+  const exitBtn = document.getElementById('fsExitBtn');
+  app.classList.toggle('fullscreen');
+  const isFs = app.classList.contains('fullscreen');
+  exitBtn.style.display = isFs ? 'flex' : 'none';
+  document.getElementById('btnFullscreen')?.classList.toggle('active', isFs);
+  // Re-fit canvas after layout change
+  requestAnimationFrame(() => { resizeOverlays(); fitToScreen(); });
+}
+
+function toggleSidebar() {
+  const app = document.querySelector('.app');
+  app.classList.toggle('sidebar-collapsed');
+  const btn = document.getElementById('sidebarToggle');
+  const collapsed = app.classList.contains('sidebar-collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  requestAnimationFrame(() => { resizeOverlays(); fitToScreen(); });
 }
 
 function toggleGrid() {
@@ -1650,17 +1704,35 @@ function toggleGrid() {
 }
 
 function drawGrid() {
+  // Draw on regular grid canvas
   const gc = gridCanvas;
   gc.width = canvasArea.clientWidth; gc.height = canvasArea.clientHeight;
   const ctx = gc.getContext('2d');
   ctx.clearRect(0, 0, gc.width, gc.height);
-  if (!state.showGrid) return;
+  if (!state.showGrid) { drawCamGrid(false); return; }
   const step = state.gridSize * state.zoom;
   if (step < 4) return;
-  ctx.strokeStyle = '#ffffff08'; ctx.lineWidth = 1;
+  ctx.strokeStyle = '#ffffff15'; ctx.lineWidth = 1;
   const ox = state.panX % step, oy = state.panY % step;
   for (let x = ox; x < gc.width; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, gc.height); ctx.stroke(); }
   for (let y = oy; y < gc.height; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(gc.width, y); ctx.stroke(); }
+  // Also draw grid on camera overlay if camera is active
+  drawCamGrid(true);
+}
+
+function drawCamGrid(show) {
+  const camGrid = document.getElementById('camGridCanvas');
+  if (!camGrid) return;
+  if (!show || !state.cameraOn) { camGrid.style.display = 'none'; return; }
+  camGrid.style.display = 'block';
+  camGrid.width = window.innerWidth; camGrid.height = window.innerHeight;
+  const ctx = camGrid.getContext('2d');
+  ctx.clearRect(0, 0, camGrid.width, camGrid.height);
+  const step = state.gridSize * 3; // Larger step for full-screen camera grid
+  if (step < 4) return;
+  ctx.strokeStyle = '#ffffff20'; ctx.lineWidth = 1;
+  for (let x = 0; x < camGrid.width; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, camGrid.height); ctx.stroke(); }
+  for (let y = 0; y < camGrid.height; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(camGrid.width, y); ctx.stroke(); }
 }
 
 function toggleSymmetry() {
@@ -2149,6 +2221,26 @@ function onHandResults(results) {
       cCtx.lineTo(it.x, it.y);
       cCtx.stroke();
       cCtx.restore();
+      // Symmetry mirrors for camera drawing
+      if (state.symmetry !== 'none') {
+        const cw = camDrawCanvas.width, ch = camDrawCanvas.height;
+        const mirrors = [];
+        if (state.symmetry === 'vertical' || state.symmetry === 'both') mirrors.push([-1, 1]);
+        if (state.symmetry === 'horizontal' || state.symmetry === 'both') mirrors.push([1, -1]);
+        if (state.symmetry === 'both') mirrors.push([-1, -1]);
+        mirrors.forEach(([fx, fy]) => {
+          const mF = { x: fx < 0 ? cw - airLastPt.x : airLastPt.x, y: fy < 0 ? ch - airLastPt.y : airLastPt.y };
+          const mT = { x: fx < 0 ? cw - it.x : it.x, y: fy < 0 ? ch - it.y : it.y };
+          cCtx.save();
+          cCtx.strokeStyle = state.colorHex;
+          cCtx.lineWidth = state.size;
+          cCtx.lineCap = 'round'; cCtx.lineJoin = 'round';
+          cCtx.globalAlpha = state.color.a * (state.flow / 100);
+          if (state.tool === 'neon') { cCtx.shadowBlur = state.size * 2.5; cCtx.shadowColor = state.colorHex; }
+          cCtx.beginPath(); cCtx.moveTo(mF.x, mF.y); cCtx.lineTo(mT.x, mT.y); cCtx.stroke();
+          cCtx.restore();
+        });
+      }
     }
     airLastPt = { x: it.x, y: it.y };
     return;
@@ -2184,6 +2276,8 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey && k === 'z') { e.preventDefault(); undo(); return; }
   if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); return; }
   if (e.ctrlKey && e.shiftKey && k === 's') { e.preventDefault(); showExportModal(); return; }
+  if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); return; }
+  if (e.key === 'Escape' && document.querySelector('.app.fullscreen')) { e.preventDefault(); toggleFullscreen(); return; }
   if (k === ' ') { e.preventDefault(); state.spaceDown = true; canvasArea.classList.add('pan-mode'); return; }
   if (k === 'delete') { e.preventDefault(); if (!layers[activeLayerIdx].locked) { getActiveCtx().clearRect(0,0,mainCanvas.width,mainCanvas.height); compositeToMain(); saveHistory('پاککردنەوە'); } return; }
   if (k === '[') { state.size = Math.max(1, state.size - 2); document.getElementById('sizeSlider').value = state.size; updateBrushSetting(); return; }
@@ -2224,6 +2318,11 @@ function resizeOverlays() {
     handCanvas.height = window.innerHeight;
     camDrawCanvas.width = window.innerWidth;
     camDrawCanvas.height = window.innerHeight;
+    const camGrid = document.getElementById('camGridCanvas');
+    if (camGrid && state.showGrid) {
+      camGrid.width = window.innerWidth;
+      camGrid.height = window.innerHeight;
+    }
   }
   if (state.showGrid) drawGrid();
 }
