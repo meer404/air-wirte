@@ -158,6 +158,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .brush-preview-container{display:flex;justify-content:center;margin:8px 0;}
 .brush-preview-canvas{border:1px solid var(--border);border-radius:4px;background:#111122;}
 
+/* Shape fill toggle */
+.shape-fill-row{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.fill-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+.fill-toggle input{display:none;}
+.fill-toggle-slider{position:relative;width:32px;height:18px;background:#333;border-radius:9px;transition:background .2s;flex-shrink:0;}
+.fill-toggle-slider::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;background:#888;border-radius:50%;transition:transform .2s, background .2s;}
+.fill-toggle input:checked + .fill-toggle-slider{background:var(--ink);}
+.fill-toggle input:checked + .fill-toggle-slider::after{transform:translateX(14px);background:#fff;}
+.fill-toggle-label{font-size:.72rem;color:var(--text2);}
+.fill-color-pick{margin-top:6px;padding:6px 0;}
+.fill-use-stroke{display:flex;align-items:center;gap:4px;cursor:pointer;}
+.fill-use-stroke input{accent-color:var(--ink);}
+.fill-custom-color input[type=color]{width:28px;height:28px;border:2px solid var(--border);border-radius:6px;cursor:pointer;background:none;padding:0;}
+
 /* Layers */
 .layers-panel .layer-actions{display:flex;gap:3px;margin-bottom:6px;}
 .layer-action-btn{flex:1;padding:4px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:.65rem;cursor:pointer;text-align:center;transition:var(--transition);}
@@ -477,6 +491,26 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div class="brush-preview-container">
             <canvas class="brush-preview-canvas" id="brushPreview" width="180" height="50"></canvas>
           </div>
+          <!-- Auto-fill for shapes -->
+          <div class="shape-fill-row" id="shapeFillRow">
+            <label class="fill-toggle">
+              <input type="checkbox" id="shapeFillCheck" onchange="toggleShapeFill(this.checked)">
+              <span class="fill-toggle-slider"></span>
+              <span class="fill-toggle-label">پڕکردنەوەی شێوە</span>
+            </label>
+            <div class="fill-color-pick" id="fillColorPick" style="display:none;">
+              <label style="font-size:.7rem;color:var(--text2);">ڕەنگی پڕکردنەوە:</label>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+                <label class="fill-use-stroke">
+                  <input type="checkbox" id="fillUseSameColor" checked onchange="toggleFillSameColor(this.checked)">
+                  <span style="font-size:.68rem;color:var(--text2);">هەمان ڕەنگ</span>
+                </label>
+                <div class="fill-custom-color" id="fillCustomColor" style="display:none;">
+                  <input type="color" id="fillColorInput" value="#00f5d4" onchange="setFillColor(this.value)">
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -710,6 +744,8 @@ const state = {
   gridSize: 20,
   symmetry: 'none',
   cameraOn: false,
+  shapeFill: false,
+  shapeFillColor: null,   // null = use stroke color
 };
 
 // Layers
@@ -770,6 +806,9 @@ function init() {
   updateHistoryUI();
   setupCanvasEvents();
   requestAnimationFrame(fpsLoop);
+  // Hide shape fill row initially (shown only for rect/circle)
+  const fillRow = document.getElementById('shapeFillRow');
+  if (fillRow) fillRow.style.display = 'none';
 }
 
 function startApp(withCamera) {
@@ -1168,6 +1207,9 @@ function setTool(t) {
   else if (t === 'move') cls += ' move-mode';
   canvasArea.className = cls;
   updateBrushPreview();
+  // Show shape-fill row for fillable shape tools and drawing tools (finger auto-fill)
+  const fillRow = document.getElementById('shapeFillRow');
+  if (fillRow) fillRow.style.display = ['rect','circle','brush','pencil','marker','neon','calligraphy','spray'].includes(t) ? 'block' : 'none';
 }
 
 function updateBrushSetting() {
@@ -1197,6 +1239,25 @@ function updateBrushPreview() {
 
 function getDrawColor() {
   return hslToRgba(state.color.h, state.color.s, state.color.l, state.color.a * (state.flow / 100));
+}
+
+function getShapeFillColor() {
+  if (state.shapeFillColor) return state.shapeFillColor;
+  return getDrawColor();
+}
+
+function toggleShapeFill(on) {
+  state.shapeFill = on;
+  document.getElementById('fillColorPick').style.display = on ? 'block' : 'none';
+}
+
+function toggleFillSameColor(same) {
+  document.getElementById('fillCustomColor').style.display = same ? 'none' : 'inline-block';
+  state.shapeFillColor = same ? null : document.getElementById('fillColorInput').value;
+}
+
+function setFillColor(val) {
+  state.shapeFillColor = val;
 }
 
 function applyBrushStyle(ctx) {
@@ -1412,6 +1473,10 @@ function drawShapePreview(from, to) {
   tc.save(); applyBrushStyle(tc);
   tc.beginPath();
   drawShapePath(tc, state.tool, from, to);
+  if (state.shapeFill && state.tool !== 'line' && state.tool !== 'arrow') {
+    tc.fillStyle = getShapeFillColor();
+    tc.fill();
+  }
   tc.stroke(); tc.restore();
 }
 
@@ -1420,6 +1485,10 @@ function finalizeShape(from, to) {
   ctx.save(); applyBrushStyle(ctx);
   ctx.beginPath();
   drawShapePath(ctx, state.tool, from, to);
+  if (state.shapeFill && state.tool !== 'line' && state.tool !== 'arrow') {
+    ctx.fillStyle = getShapeFillColor();
+    ctx.fill();
+  }
   ctx.stroke(); ctx.restore();
 }
 
@@ -1845,6 +1914,7 @@ function importImage() {
 // ═══════════════════════════════════════════════════════════════
 let handsModel = null;
 let airLastPt = null;
+let airPathPoints = [];   // track all points in current finger stroke for auto-fill
 let lastUndoGestureTime = 0;
 let camUndoStack = [];
 const MAX_CAM_UNDO = 30;
@@ -2205,10 +2275,11 @@ function onHandResults(results) {
       return;
     }
     // Save canvas state at start of a new stroke
-    if (!airLastPt) { camSaveState(); }
+    if (!airLastPt) { camSaveState(); airPathPoints = [{ x: it.x, y: it.y }]; }
     document.getElementById('drawDot').classList.add('drawing');
     document.getElementById('statusDraw').textContent = '☝️ نووسین...';
     if (airLastPt) {
+      airPathPoints.push({ x: it.x, y: it.y });
       cCtx.save();
       cCtx.strokeStyle = state.colorHex;
       cCtx.lineWidth = state.size;
@@ -2246,13 +2317,42 @@ function onHandResults(results) {
     return;
   }
 
-  airEnd();
+  airEndAndFill(camDrawCanvas);
   document.getElementById('drawDot').className = 'dot';
   document.getElementById('statusDraw').textContent = 'پەنجەت بلند بکە';
 }
 
 function airEnd() {
   airLastPt = null;
+  airPathPoints = [];
+}
+
+function airEndAndFill(canvas) {
+  // Auto-fill: if the path forms a closed shape, fill it
+  if (state.shapeFill && airPathPoints.length > 20) {
+    const first = airPathPoints[0];
+    const last = airPathPoints[airPathPoints.length - 1];
+    const closeDist = Math.hypot(last.x - first.x, last.y - first.y);
+    // Compute bounding box of the path
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    airPathPoints.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+    const diag = Math.hypot(maxX - minX, maxY - minY);
+    // If start and end points are close enough relative to shape size, auto-fill
+    if (diag > 30 && closeDist < diag * 0.25) {
+      const cCtx = canvas.getContext('2d');
+      cCtx.save();
+      cCtx.fillStyle = getShapeFillColor();
+      cCtx.globalAlpha = state.color.a * (state.flow / 100);
+      cCtx.beginPath();
+      cCtx.moveTo(airPathPoints[0].x, airPathPoints[0].y);
+      for (let i = 1; i < airPathPoints.length; i++) cCtx.lineTo(airPathPoints[i].x, airPathPoints[i].y);
+      cCtx.closePath();
+      cCtx.fill();
+      cCtx.restore();
+    }
+  }
+  airLastPt = null;
+  airPathPoints = [];
 }
 
 // ═══════════════════════════════════════════════════════════════
