@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نووسینی هەوایی</title>
+
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #00f5d4;
+    --bg: #0a0a14;
+    --panel: #111120;
+    --accent: #f72585;
+    --text: #e0e0ff;
+    --glow: 0 0 20px #00f5d480;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Naskh Arabic', serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  header {
+    width: 100%;
+    padding: 14px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ffffff10;
+    background: var(--panel);
+    z-index: 10;
+  }
+
+  header h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--ink);
+    text-shadow: var(--glow);
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  button {
+    padding: 8px 18px;
+    border: 1.5px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+
+  button:hover {
+    background: var(--ink);
+    color: var(--bg);
+    box-shadow: var(--glow);
+  }
+
+  button.danger {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  button.danger:hover {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 0 20px #f7258580;
+  }
+
+  .workspace {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Drawing Canvas (top) */
+  #drawCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    cursor: none;
+  }
+
+  /* Camera feed (behind) */
+  #videoElement {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.18;
+    transform: scaleX(-1);
+    z-index: 1;
+  }
+
+  /* Hand tracking canvas */
+  #handCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 6;
+    pointer-events: none;
+    transform: scaleX(-1);
+  }
+
+  .status-bar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff10;
+    backdrop-filter: blur(10px);
+    border: 1px solid #ffffff20;
+    padding: 8px 20px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: #aaa;
+    z-index: 10;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555;
+    transition: background 0.2s;
+  }
+
+  .dot.active { background: var(--ink); box-shadow: var(--glow); }
+  .dot.drawing { background: var(--accent); box-shadow: 0 0 10px #f72585; }
+
+  /* Color picker */
+  .color-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .color-swatch {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+
+  .color-swatch:hover, .color-swatch.selected {
+    transform: scale(1.3);
+    border-color: white;
+  }
+
+  /* Size slider */
+  input[type=range] {
+    -webkit-appearance: none;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+    width: 80px;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    cursor: pointer;
+    box-shadow: var(--glow);
+  }
+
+  .label {
+    font-size: 0.8rem;
+    color: #888;
+  }
+
+  .overlay-start {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10,10,20,0.85);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .overlay-start h2 {
+    font-size: 2rem;
+    color: var(--ink);
+    text-shadow: var(--glow);
+  }
+
+  .overlay-start p {
+    font-size: 1rem;
+    color: #aaa;
+    max-width: 400px;
+    line-height: 1.8;
+  }
+
+  .big-btn {
+    padding: 14px 40px;
+    font-size: 1.1rem;
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    font-weight: bold;
+  }
+
+  .big-btn:hover {
+    background: #00c9b0;
+  }
+
+  .instruction-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 460px;
+    margin-top: 10px;
+  }
+
+  .instr-card {
+    background: #ffffff08;
+    border: 1px solid #ffffff15;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: #ccc;
+    line-height: 1.6;
+  }
+
+  .instr-card span {
+    display: block;
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>✍️ نووسینی هەوایی</h1>
+  <div class="controls">
+    <div class="color-row">
+      <span class="label">ڕەنگ:</span>
+      <div class="color-swatch selected" style="background:#00f5d4" data-color="#00f5d4"></div>
+      <div class="color-swatch" style="background:#f72585" data-color="#f72585"></div>
+      <div class="color-swatch" style="background:#ffffff" data-color="#ffffff"></div>
+      <div class="color-swatch" style="background:#ffd60a" data-color="#ffd60a"></div>
+      <div class="color-swatch" style="background:#7b2fff" data-color="#7b2fff"></div>
+    </div>
+    <span class="label">قەڵەم:</span>
+    <input type="range" id="brushSize" min="2" max="20" value="6">
+    <button onclick="clearCanvas()">پاکردنەوە 🗑️</button>
+    <button onclick="saveImage()">تۆمارکردن 💾</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <video id="videoElement" autoplay playsinline muted></video>
+  <canvas id="drawCanvas"></canvas>
+  <canvas id="handCanvas"></canvas>
+
+  <div class="status-bar">
+    <div class="dot" id="camDot"></div>
+    <span id="statusText">کامێرا چاوەڕوانە...</span>
+    <div class="dot" id="drawDot"></div>
+    <span id="drawStatus">پەنجەی نیشانە لابنە سەر</span>
+  </div>
+
+  <div class="overlay-start" id="startOverlay">
+    <h2>✍️ هەوایی بنووسە!</h2>
+    <p>پەنجەی نیشانەت بلند بکە — وەک قەڵەم دەگرێتەوە<br>
+    پەنجەی ناوەڕاستیش بلند بکە بۆ ئەوەی قەڵەم هەڵبگرێت</p>
+
+    <div class="instruction-grid">
+      <div class="instr-card"><span>☝️</span>پەنجەی نیشانە تەنها = نووسین</div>
+      <div class="instr-card"><span>✌️</span>دوو پەنجە = لاوەکی کۆتایی</div>
+      <div class="instr-card"><span>🤚</span>ئەلی کف = پاکردنەوە</div>
+      <div class="instr-card"><span>💾</span>دوگمەی تۆمار = وێنە پاشەکەوت بکە</div>
+    </div>
+
+    <button class="big-btn" onclick="startCamera()">کامێرا دەستپێبکە 📷</button>
+  </div>
+</div>
+
+<script>
+  const video = document.getElementById('videoElement');
+  const drawCanvas = document.getElementById('drawCanvas');
+  const handCanvas = document.getElementById('handCanvas');
+  const ctx = drawCanvas.getContext('2d');
+  const hCtx = handCanvas.getContext('2d');
+
+  let currentColor = '#00f5d4';
+  let brushSize = 6;
+  let isDrawing = false;
+  let lastX = null, lastY = null;
+  let hands = null;
+
+  // Resize canvases
+  function resizeCanvases() {
+    const ws = document.querySelector('.workspace');
+    const w = ws.clientWidth, h = ws.clientHeight;
+    drawCanvas.width = w; drawCanvas.height = h;
+    handCanvas.width = w; handCanvas.height = h;
+  }
+  resizeCanvases();
+  window.addEventListener('resize', resizeCanvases);
+
+  // Color swatches
+  document.querySelectorAll('.color-swatch').forEach(s => {
+    s.addEventListener('click', () => {
+      document.querySelectorAll('.color-swatch').forEach(x => x.classList.remove('selected'));
+      s.classList.add('selected');
+      currentColor = s.dataset.color;
+    });
+  });
+
+  document.getElementById('brushSize').addEventListener('input', e => {
+    brushSize = parseInt(e.target.value);
+  });
+
+  function clearCanvas() {
+    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  }
+
+  function saveImage() {
+    // Merge background + drawing
+    const tmp = document.createElement('canvas');
+    tmp.width = drawCanvas.width; tmp.height = drawCanvas.height;
+    const t = tmp.getContext('2d');
+    t.fillStyle = '#0a0a14';
+    t.fillRect(0, 0, tmp.width, tmp.height);
+    t.drawImage(drawCanvas, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'air-writing.png';
+    a.href = tmp.toDataURL();
+    a.click();
+  }
+
+  // ------- Hand Tracking -------
+  function startCamera() {
+    document.getElementById('startOverlay').style.display = 'none';
+
+    hands = new Hands({locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }});
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.6
+    });
+
+    hands.onResults(onHandResults);
+
+    const camera = new Camera(video, {
+      onFrame: async () => { await hands.send({image: video}); },
+      width: 1280, height: 720
+    });
+
+    camera.start().then(() => {
+      document.getElementById('camDot').classList.add('active');
+      document.getElementById('statusText').textContent = 'کامێرا چالاکە ✓';
+    }).catch(e => {
+      document.getElementById('statusText').textContent = 'کامێرا نەگرا: ' + e.message;
+    });
+  }
+
+  function onHandResults(results) {
+    hCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      endStroke();
+      document.getElementById('drawDot').className = 'dot';
+      document.getElementById('drawStatus').textContent = 'دەست نەدیتراوە';
+      return;
+    }
+
+    const landmarks = results.multiHandLandmarks[0];
+    // Mirror X because video is mirrored
+    const W = handCanvas.width, H = handCanvas.height;
+
+    // Key landmarks
+    const indexTip  = landmarks[8];  // Index finger tip
+    const indexPip  = landmarks[6];  // Index finger pip
+    const middleTip = landmarks[12]; // Middle finger tip
+    const middlePip = landmarks[10]; // Middle pip
+    const thumbTip  = landmarks[4];  // Thumb tip
+    const wrist     = landmarks[0];
+
+    // Convert to canvas coords (mirror X)
+    function toCanvas(lm) {
+      return { x: (1 - lm.x) * W, y: lm.y * H };
+    }
+
+    const it = toCanvas(indexTip);
+    const ip = toCanvas(indexPip);
+    const mt = toCanvas(middleTip);
+    const mp = toCanvas(middlePip);
+    const tt = toCanvas(thumbTip);
+    const wr = toCanvas(wrist);
+
+    // Detect finger raised (tip above pip)
+    const indexUp  = indexTip.y < indexPip.y - 0.03;
+    const middleUp = middleTip.y < middlePip.y - 0.03;
+
+    // Detect open palm (all fingers up roughly)
+    const allUp = landmarks[20].y < landmarks[17].y &&
+                  landmarks[16].y < landmarks[14].y;
+
+    // Draw fingertip cursor
+    hCtx.beginPath();
+    hCtx.arc(it.x, it.y, 10, 0, Math.PI * 2);
+    hCtx.strokeStyle = currentColor;
+    hCtx.lineWidth = 2;
+    hCtx.shadowBlur = 15;
+    hCtx.shadowColor = currentColor;
+    hCtx.stroke();
+
+    // OPEN PALM = clear
+    if (allUp) {
+      clearCanvas();
+      endStroke();
+      document.getElementById('drawDot').className = 'dot';
+      document.getElementById('drawStatus').textContent = 'ئەلی کف — پاکردنەوە! 🤚';
+      return;
+    }
+
+    // TWO FINGERS = lift pen
+    if (indexUp && middleUp) {
+      endStroke();
+      document.getElementById('drawDot').className = 'dot';
+      document.getElementById('drawStatus').textContent = '✌️ قەڵەم هەڵگیراوە';
+      return;
+    }
+
+    // ONE FINGER = draw
+    if (indexUp && !middleUp) {
+      document.getElementById('drawDot').classList.add('drawing');
+      document.getElementById('drawStatus').textContent = '☝️ نووسین...';
+      draw(it.x, it.y);
+    } else {
+      endStroke();
+      document.getElementById('drawDot').className = 'dot';
+      document.getElementById('drawStatus').textContent = 'پەنجەی نیشانە بلند بکە';
+    }
+
+    // Draw hand skeleton (simple)
+    hCtx.shadowBlur = 0;
+    drawConnections(landmarks, W, H);
+  }
+
+  function draw(x, y) {
+    if (lastX === null) { lastX = x; lastY = y; }
+
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = currentColor;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    lastX = x; lastY = y;
+    isDrawing = true;
+  }
+
+  function endStroke() {
+    lastX = null; lastY = null;
+    isDrawing = false;
+  }
+
+  function drawConnections(lms, W, H) {
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],[0,17]
+    ];
+
+    hCtx.strokeStyle = '#ffffff20';
+    hCtx.lineWidth = 1;
+    hCtx.shadowBlur = 0;
+
+    connections.forEach(([a, b]) => {
+      const pa = { x: (1-lms[a].x)*W, y: lms[a].y*H };
+      const pb = { x: (1-lms[b].x)*W, y: lms[b].y*H };
+      hCtx.beginPath();
+      hCtx.moveTo(pa.x, pa.y);
+      hCtx.lineTo(pb.x, pb.y);
+      hCtx.stroke();
+    });
+  }
+</script>
+</body>
+</html>
