@@ -75,6 +75,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .canvas-area{position:relative;overflow:hidden;background:var(--bg);cursor:crosshair;}
 .canvas-area.pan-mode{cursor:grab;}
 .canvas-area.pan-mode:active{cursor:grabbing;}
+.canvas-area.move-mode{cursor:crosshair;}
+
+/* Move tool selection */
+.move-selection{position:absolute;border:2px dashed var(--ink);background:rgba(0,245,212,.06);pointer-events:none;z-index:10;box-shadow:0 0 12px rgba(0,245,212,.15);}
+.move-selection.grabbing{cursor:move;pointer-events:auto;}
+.canvas-area.move-grab{cursor:move;}
 
 .canvas-container{position:absolute;transform-origin:0 0;}
 #drawCanvas{display:block;background:#111122;border-radius:2px;box-shadow:0 0 60px #00000080;}
@@ -228,8 +234,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   <div class="instruction-grid">
     <div class="instr-card"><span>☝️</span>پەنجەی نیشانە تەنها = نووسین</div>
     <div class="instr-card"><span>✌️</span>دوو پەنجە = قەڵەم هەڵبگرە</div>
+    <div class="instr-card"><span>�</span>پەنجە + پەنجەگەورە = گواستنەوە</div>
     <div class="instr-card"><span>🤚</span>ئەلی کف = پاکردنەوە</div>
-    <div class="instr-card"><span>🖱️</span>ماوس/لێدان = کێشانی ڕاستەوخۆ</div>
   </div>
 
   <div class="start-options">
@@ -360,6 +366,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="tool-btn" data-tool="eyedrop" onclick="setTool('eyedrop')">
       💧<span class="tooltip">Eyedropper (I)</span>
+    </button>
+    <button class="tool-btn" data-tool="move" onclick="setTool('move')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,9 2,12 5,15"/><polyline points="9,5 12,2 15,5"/><polyline points="15,19 12,22 9,19"/><polyline points="19,9 22,12 19,15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg><span class="tooltip">Move (V)</span>
     </button>
     <button class="tool-btn" data-tool="pan" onclick="setTool('pan')">
       🤚<span class="tooltip">Pan (H / Space)</span>
@@ -613,6 +622,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div><span class="key">O</span> Circle</div>
       <div><span class="key">T</span> Text</div>
       <div><span class="key">I</span> Eyedropper</div>
+      <div><span class="key">V</span> Move</div>
       <div><span class="key">H</span> Pan</div>
       <div><span class="key">G</span> Toggle Grid</div>
       <div><span class="key">Ctrl+Z</span> Undo</div>
@@ -625,7 +635,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div style="grid-column:1/-1;margin-top:8px;font-weight:600;color:var(--ink);">🖐 ئاماژەی دەست (کامێرا)</div>
       <div><span class="key">☝️</span> نووسین</div>
       <div><span class="key">✌️</span> قەڵەم هەڵگیراوە</div>
-      <div><span class="key">🤟 ٣ پەنجە</span> گەڕانەوە (Undo)</div>
+      <div><span class="key">� پینچ</span> گواستنەوە (Move)</div>
+      <div><span class="key">�🤟 ٣ پەنجە</span> گەڕانەوە (Undo)</div>
       <div><span class="key">🤚 هەموو</span> پاککردنەوە</div>
     </div>
     <div class="modal-actions">
@@ -644,7 +655,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 const TOOLS = {
   brush:'Brush', pencil:'Pencil', marker:'Marker', spray:'Spray', neon:'Neon Glow',
   calligraphy:'Calligraphy', eraser:'Eraser', fill:'Fill', line:'Line', rect:'Rectangle',
-  circle:'Circle', arrow:'Arrow', text:'Text', eyedrop:'Eyedropper', pan:'Pan'
+  circle:'Circle', arrow:'Arrow', text:'Text', eyedrop:'Eyedropper', move:'Move', pan:'Pan'
 };
 
 const state = {
@@ -683,6 +694,18 @@ let lastPt = null;
 let pointsBuffer = [];
 let shapeStart = null;
 let historyDebounce = null;
+
+// Move tool state
+let moveState = {
+  phase: 'none',       // 'none' | 'selecting' | 'selected' | 'dragging'
+  selRect: null,       // {x,y,w,h} in canvas coords
+  selImageData: null,  // ImageData of selected region
+  selCanvas: null,     // offscreen canvas holding cut content
+  dragStart: null,     // {x,y} in canvas coords where drag started
+  currentOffset: null, // {dx,dy} current drag offset
+  bgSnapshot: null,    // canvas snapshot of layer with selection area cleared
+};
+let moveSelEl = null;  // DOM element for selection rectangle
 
 // FPS counter
 let frameCount = 0, lastFpsTime = performance.now();
@@ -1101,10 +1124,15 @@ function initSwatches() {
 // BRUSH SETTINGS
 // ═══════════════════════════════════════════════════════════════
 function setTool(t) {
+  // Finalize move selection when switching away from move tool
+  if (state.tool === 'move' && t !== 'move') finalizeMoveSelection();
   state.tool = t;
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
   document.getElementById('statusTool').textContent = TOOLS[t] || t;
-  canvasArea.className = 'canvas-area' + (t === 'pan' ? ' pan-mode' : '');
+  let cls = 'canvas-area';
+  if (t === 'pan') cls += ' pan-mode';
+  else if (t === 'move') cls += ' move-mode';
+  canvasArea.className = cls;
   updateBrushPreview();
 }
 
@@ -1209,6 +1237,7 @@ function onDown(e) {
   if (state.tool === 'eyedrop') { doEyedrop(pt); return; }
   if (state.tool === 'fill') { doFloodFill(Math.round(pt.x), Math.round(pt.y)); return; }
   if (state.tool === 'text') { doText(pt); return; }
+  if (state.tool === 'move') { onMoveDown(pt, e); return; }
 
   if (['line','rect','circle','arrow'].includes(state.tool)) {
     drawing = true; shapeStart = pt; return;
@@ -1233,6 +1262,8 @@ function onMove(e) {
     return;
   }
 
+  if (state.tool === 'move') { onMoveMove(pt, e); return; }
+
   if (!drawing) return;
 
   if (['line','rect','circle','arrow'].includes(state.tool)) {
@@ -1253,6 +1284,7 @@ function onMove(e) {
 
 function onUp(e) {
   if (state.isPanning) { state.isPanning = false; panStart = null; return; }
+  if (state.tool === 'move') { onMoveUp(screenToCanvas(e)); return; }
   if (!drawing) return;
 
   if (['line','rect','circle','arrow'].includes(state.tool) && shapeStart) {
@@ -1442,10 +1474,139 @@ function doText(pt) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// MOVE TOOL
+// ═══════════════════════════════════════════════════════════════
+function createMoveSelEl() {
+  if (moveSelEl) moveSelEl.remove();
+  moveSelEl = document.createElement('div');
+  moveSelEl.className = 'move-selection';
+  canvasArea.appendChild(moveSelEl);
+}
+
+function updateMoveSelElPos(r) {
+  if (!moveSelEl) return;
+  const cr = container.getBoundingClientRect();
+  const ca = canvasArea.getBoundingClientRect();
+  moveSelEl.style.left = (cr.left - ca.left + r.x * state.zoom) + 'px';
+  moveSelEl.style.top = (cr.top - ca.top + r.y * state.zoom) + 'px';
+  moveSelEl.style.width = (r.w * state.zoom) + 'px';
+  moveSelEl.style.height = (r.h * state.zoom) + 'px';
+}
+
+function removeMoveSelEl() {
+  if (moveSelEl) { moveSelEl.remove(); moveSelEl = null; }
+}
+
+function onMoveDown(pt, e) {
+  if (moveState.phase === 'none' || moveState.phase === 'selecting') {
+    moveState.phase = 'selecting';
+    moveState.selRect = { x: pt.x, y: pt.y, w: 0, h: 0 };
+    moveState.dragStart = { x: pt.x, y: pt.y };
+    createMoveSelEl();
+    return;
+  }
+  if (moveState.phase === 'selected') {
+    const r = moveState.selRect;
+    const oX = moveState.currentOffset ? moveState.currentOffset.dx : 0;
+    const oY = moveState.currentOffset ? moveState.currentOffset.dy : 0;
+    if (pt.x >= r.x + oX && pt.x <= r.x + r.w + oX &&
+        pt.y >= r.y + oY && pt.y <= r.y + r.h + oY) {
+      moveState.phase = 'dragging';
+      moveState.dragStart = { x: pt.x - oX, y: pt.y - oY };
+      canvasArea.classList.add('move-grab');
+      return;
+    } else {
+      finalizeMoveSelection();
+      moveState.phase = 'selecting';
+      moveState.selRect = { x: pt.x, y: pt.y, w: 0, h: 0 };
+      moveState.dragStart = { x: pt.x, y: pt.y };
+      createMoveSelEl();
+      return;
+    }
+  }
+}
+
+function onMoveMove(pt, e) {
+  if (moveState.phase === 'selecting') {
+    const sx = moveState.dragStart.x, sy = moveState.dragStart.y;
+    const x = Math.min(sx, pt.x), y = Math.min(sy, pt.y);
+    const w = Math.abs(pt.x - sx), h = Math.abs(pt.y - sy);
+    moveState.selRect = { x, y, w, h };
+    updateMoveSelElPos(moveState.selRect);
+    return;
+  }
+  if (moveState.phase === 'dragging') {
+    const dx = pt.x - moveState.dragStart.x;
+    const dy = pt.y - moveState.dragStart.y;
+    moveState.currentOffset = { dx, dy };
+    const ctx = getActiveCtx();
+    ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+    ctx.drawImage(moveState.bgSnapshot, 0, 0);
+    ctx.drawImage(moveState.selCanvas, moveState.selRect.x + dx, moveState.selRect.y + dy);
+    compositeToMain();
+    updateMoveSelElPos({ x: moveState.selRect.x + dx, y: moveState.selRect.y + dy, w: moveState.selRect.w, h: moveState.selRect.h });
+    return;
+  }
+}
+
+function onMoveUp(pt) {
+  if (moveState.phase === 'selecting') {
+    const r = moveState.selRect;
+    if (r.w < 3 || r.h < 3) {
+      moveState.phase = 'none';
+      removeMoveSelEl();
+      return;
+    }
+    moveState.phase = 'selected';
+    moveState.currentOffset = { dx: 0, dy: 0 };
+    const layerCanvas = layers[activeLayerIdx].canvas;
+    const layerCtx = layerCanvas.getContext('2d');
+    const sx = Math.max(0, Math.round(r.x));
+    const sy = Math.max(0, Math.round(r.y));
+    const sw = Math.min(Math.round(r.w), layerCanvas.width - sx);
+    const sh = Math.min(Math.round(r.h), layerCanvas.height - sy);
+    moveState.selCanvas = document.createElement('canvas');
+    moveState.selCanvas.width = sw;
+    moveState.selCanvas.height = sh;
+    moveState.selCanvas.getContext('2d').drawImage(layerCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    moveState.bgSnapshot = document.createElement('canvas');
+    moveState.bgSnapshot.width = layerCanvas.width;
+    moveState.bgSnapshot.height = layerCanvas.height;
+    const bgCtx = moveState.bgSnapshot.getContext('2d');
+    bgCtx.drawImage(layerCanvas, 0, 0);
+    bgCtx.clearRect(sx, sy, sw, sh);
+    moveState.selRect = { x: sx, y: sy, w: sw, h: sh };
+    updateMoveSelElPos(moveState.selRect);
+    moveSelEl.classList.add('grabbing');
+    return;
+  }
+  if (moveState.phase === 'dragging') {
+    moveState.phase = 'selected';
+    canvasArea.classList.remove('move-grab');
+    return;
+  }
+}
+
+function finalizeMoveSelection() {
+  if (moveState.phase === 'selected' || moveState.phase === 'dragging') {
+    const ctx = getActiveCtx();
+    const off = moveState.currentOffset || { dx: 0, dy: 0 };
+    ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+    ctx.drawImage(moveState.bgSnapshot, 0, 0);
+    ctx.drawImage(moveState.selCanvas, moveState.selRect.x + off.dx, moveState.selRect.y + off.dy);
+    compositeToMain();
+    saveHistory('گواستنەوە');
+  }
+  moveState = { phase: 'none', selRect: null, selImageData: null, selCanvas: null, dragStart: null, currentOffset: null, bgSnapshot: null };
+  removeMoveSelEl();
+  canvasArea.classList.remove('move-grab');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CURSOR
 // ═══════════════════════════════════════════════════════════════
 function updateCursor(e) {
-  if (['pan','text','fill','eyedrop'].includes(state.tool)) { cursorPrev.style.display = 'none'; return; }
+  if (['pan','text','fill','eyedrop','move'].includes(state.tool)) { cursorPrev.style.display = 'none'; return; }
   cursorPrev.style.display = 'block';
   const s = state.size * state.zoom;
   cursorPrev.style.width = s + 'px'; cursorPrev.style.height = s + 'px';
@@ -1616,6 +1777,125 @@ let lastUndoGestureTime = 0;
 let camUndoStack = [];
 const MAX_CAM_UNDO = 30;
 
+// Pinch-to-move state (camera mode)
+let camMoveState = {
+  phase: 'idle',        // 'idle' | 'confirm' | 'moving'
+  snapshot: null,        // offscreen canvas holding content before move
+  snapshotBounds: null,  // {x,y,w,h} tight bounding box of drawn content
+  startPt: null,         // {x,y} smoothed pinch position at grab start
+  smoothPt: null,        // {x,y} current smoothed pinch position
+  confirmStart: 0,       // timestamp when pinch first detected (for confirm delay)
+  pinchFrames: 0,        // consecutive frames of pinch detected
+  totalDx: 0,            // accumulated offset
+  totalDy: 0,
+};
+const PINCH_START_DIST = 50;     // px - max distance to start pinch
+const PINCH_END_DIST = 75;       // px - distance to release pinch (hysteresis)
+const PINCH_CONFIRM_MS = 250;    // ms to hold pinch before activating move
+const PINCH_CONFIRM_FRAMES = 6;  // minimum consecutive frames
+const MOVE_SMOOTH = 0.35;        // smoothing factor (0=no smooth, 1=no movement)
+const PINCH_DRAW_COOLDOWN = 400; // ms after pinch release before allowing drawing
+let lastPinchEndTime = 0;        // timestamp when pinch last ended
+
+// Offscreen canvas reused for move rendering
+let _moveOffscreen = null;
+function getMoveOffscreen(w, h) {
+  if (!_moveOffscreen || _moveOffscreen.width !== w || _moveOffscreen.height !== h) {
+    _moveOffscreen = document.createElement('canvas');
+    _moveOffscreen.width = w; _moveOffscreen.height = h;
+  }
+  return _moveOffscreen;
+}
+
+// Find tight bounding box of non-transparent pixels
+function getContentBounds(canvas) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = 0, maxY = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4 + 3] > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX) return null; // empty
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+function smoothPt(cur, target, factor) {
+  return {
+    x: cur.x + (target.x - cur.x) * (1 - factor),
+    y: cur.y + (target.y - cur.y) * (1 - factor),
+  };
+}
+
+function drawMoveUI(hCtx, midPt, phase, progress, bounds, dx, dy) {
+  hCtx.save();
+
+  if (phase === 'confirm') {
+    // Pulsing ring showing confirmation progress
+    const radius = 28;
+    const angle = progress * Math.PI * 2;
+    // Background circle
+    hCtx.beginPath(); hCtx.arc(midPt.x, midPt.y, radius, 0, Math.PI * 2);
+    hCtx.strokeStyle = '#ffffff30'; hCtx.lineWidth = 4; hCtx.stroke();
+    // Progress arc
+    hCtx.beginPath(); hCtx.arc(midPt.x, midPt.y, radius, -Math.PI / 2, -Math.PI / 2 + angle);
+    hCtx.strokeStyle = '#ffd60a'; hCtx.lineWidth = 4;
+    hCtx.shadowBlur = 15; hCtx.shadowColor = '#ffd60a';
+    hCtx.stroke(); hCtx.shadowBlur = 0;
+    // Inner dot
+    hCtx.beginPath(); hCtx.arc(midPt.x, midPt.y, 5, 0, Math.PI * 2);
+    hCtx.fillStyle = '#ffd60a'; hCtx.fill();
+    // Label
+    hCtx.fillStyle = '#ffd60a'; hCtx.font = 'bold 13px Inter, sans-serif';
+    hCtx.textAlign = 'center'; hCtx.textBaseline = 'bottom';
+    hCtx.fillText('🤏 گرتن...', midPt.x, midPt.y - 36);
+  }
+
+  if (phase === 'moving') {
+    // Solid grab indicator
+    hCtx.beginPath(); hCtx.arc(midPt.x, midPt.y, 22, 0, Math.PI * 2);
+    hCtx.fillStyle = 'rgba(255,214,10,.15)'; hCtx.fill();
+    hCtx.strokeStyle = '#ffd60a'; hCtx.lineWidth = 3;
+    hCtx.shadowBlur = 20; hCtx.shadowColor = '#ffd60a';
+    hCtx.stroke(); hCtx.shadowBlur = 0;
+    // Move arrows
+    const as = 10;
+    hCtx.strokeStyle = '#ffd60a'; hCtx.lineWidth = 2;
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([ax,ay]) => {
+      const bx = midPt.x + ax * 30, by = midPt.y + ay * 30;
+      hCtx.beginPath(); hCtx.moveTo(midPt.x + ax * 14, midPt.y + ay * 14); hCtx.lineTo(bx, by);
+      hCtx.moveTo(bx, by); hCtx.lineTo(bx - ax * as + ay * (as/2), by - ay * as + ax * (as/2));
+      hCtx.moveTo(bx, by); hCtx.lineTo(bx - ax * as - ay * (as/2), by - ay * as - ax * (as/2));
+      hCtx.stroke();
+    });
+    // Label
+    hCtx.fillStyle = '#ffd60a'; hCtx.font = 'bold 13px Inter, sans-serif';
+    hCtx.textAlign = 'center'; hCtx.textBaseline = 'bottom';
+    const dist = Math.round(Math.hypot(dx, dy));
+    hCtx.fillText('📦 گواستنەوە  (' + dist + 'px)', midPt.x, midPt.y - 40);
+
+    // Ghost outline of original position
+    if (bounds) {
+      hCtx.setLineDash([6, 4]);
+      hCtx.strokeStyle = 'rgba(255,255,255,.25)'; hCtx.lineWidth = 1.5;
+      hCtx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.w + 4, bounds.h + 4);
+      // New position outline
+      hCtx.strokeStyle = '#ffd60a80'; hCtx.lineWidth = 1.5;
+      hCtx.strokeRect(bounds.x + dx - 2, bounds.y + dy - 2, bounds.w + 4, bounds.h + 4);
+      hCtx.setLineDash([]);
+    }
+  }
+
+  hCtx.restore();
+}
+
 function camSaveState() {
   if (!camDrawCanvas.width || !camDrawCanvas.height) return;
   const cCtx = camDrawCanvas.getContext('2d');
@@ -1711,6 +1991,108 @@ function onHandResults(results) {
   // Draw directly on the full-screen cam draw canvas
   const cCtx = camDrawCanvas.getContext('2d');
 
+  // ── Detect pinch (thumb tip + index tip proximity) with hysteresis ──
+  const thumbTip = pt(lm[4]);
+  const pinchDist = Math.hypot(thumbTip.x - it.x, thumbTip.y - it.y);
+  const wasPinching = camMoveState.phase !== 'idle';
+  const pinchThreshold = wasPinching ? PINCH_END_DIST : PINCH_START_DIST;
+  const isPinching = pinchDist < pinchThreshold;
+  // Only trigger pinch-move when index+thumb only (no other fingers)
+  const pinchGesture = isPinching && indexUp && !middleUp && !ringUp && !pinkyUp;
+
+  // ── PINCH TO MOVE (with confirm hold + smoothing) ──
+  if (pinchGesture) {
+    airEnd();
+    const rawMid = { x: (thumbTip.x + it.x) / 2, y: (thumbTip.y + it.y) / 2 };
+
+    if (camMoveState.phase === 'idle') {
+      // Start confirmation phase
+      camMoveState.phase = 'confirm';
+      camMoveState.confirmStart = performance.now();
+      camMoveState.pinchFrames = 1;
+      camMoveState.smoothPt = { x: rawMid.x, y: rawMid.y };
+      drawMoveUI(hCtx, rawMid, 'confirm', 0, null, 0, 0);
+      document.getElementById('drawDot').className = 'dot active';
+      document.getElementById('statusDraw').textContent = '🤏 گرتن بۆ گواستنەوە...';
+      return;
+    }
+
+    // Smooth the position
+    camMoveState.smoothPt = smoothPt(camMoveState.smoothPt, rawMid, MOVE_SMOOTH);
+    const midPt = camMoveState.smoothPt;
+
+    if (camMoveState.phase === 'confirm') {
+      camMoveState.pinchFrames++;
+      const elapsed = performance.now() - camMoveState.confirmStart;
+      const progress = Math.min(1, Math.max(elapsed / PINCH_CONFIRM_MS, camMoveState.pinchFrames / PINCH_CONFIRM_FRAMES));
+      drawMoveUI(hCtx, midPt, 'confirm', progress, null, 0, 0);
+      document.getElementById('statusDraw').textContent = '🤏 گرتن... ' + Math.round(progress * 100) + '%';
+
+      if (elapsed >= PINCH_CONFIRM_MS && camMoveState.pinchFrames >= PINCH_CONFIRM_FRAMES) {
+        // Confirmed! Take snapshot and enter moving phase
+        camSaveState();
+        const snapshotCv = getMoveOffscreen(camDrawCanvas.width, camDrawCanvas.height);
+        snapshotCv.getContext('2d').clearRect(0, 0, snapshotCv.width, snapshotCv.height);
+        snapshotCv.getContext('2d').drawImage(camDrawCanvas, 0, 0);
+        camMoveState.snapshot = document.createElement('canvas');
+        camMoveState.snapshot.width = camDrawCanvas.width;
+        camMoveState.snapshot.height = camDrawCanvas.height;
+        camMoveState.snapshot.getContext('2d').drawImage(camDrawCanvas, 0, 0);
+        camMoveState.snapshotBounds = getContentBounds(camDrawCanvas);
+        camMoveState.startPt = { x: midPt.x, y: midPt.y };
+        camMoveState.totalDx = 0;
+        camMoveState.totalDy = 0;
+        camMoveState.phase = 'moving';
+      }
+      return;
+    }
+
+    if (camMoveState.phase === 'moving') {
+      const dx = midPt.x - camMoveState.startPt.x;
+      const dy = midPt.y - camMoveState.startPt.y;
+      camMoveState.totalDx = dx;
+      camMoveState.totalDy = dy;
+
+      // Render moved content
+      cCtx.clearRect(0, 0, camDrawCanvas.width, camDrawCanvas.height);
+      cCtx.drawImage(camMoveState.snapshot, dx, dy);
+
+      // Draw UI overlay
+      drawMoveUI(hCtx, midPt, 'moving', 1, camMoveState.snapshotBounds, dx, dy);
+
+      document.getElementById('drawDot').className = 'dot active';
+      document.getElementById('statusDraw').textContent = '📦 گواستنەوە... (' + Math.round(Math.hypot(dx, dy)) + 'px)';
+      return;
+    }
+    return;
+  }
+
+  // If pinch was active and now released, finalize position
+  if (camMoveState.phase === 'moving') {
+    // Content already drawn at shifted position, finalize
+    camMoveState.phase = 'idle';
+    camMoveState.snapshot = null;
+    camMoveState.snapshotBounds = null;
+    camMoveState.startPt = null;
+    camMoveState.smoothPt = null;
+    lastPinchEndTime = performance.now();
+    camSaveState();
+    document.getElementById('statusDraw').textContent = '✅ گواستراوە!';
+    setTimeout(() => {
+      if (document.getElementById('statusDraw').textContent === '✅ گواستراوە!') {
+        document.getElementById('statusDraw').textContent = 'ئامادەیە';
+      }
+    }, 1200);
+    return;
+  } else if (camMoveState.phase === 'confirm') {
+    // Cancel - didn't hold long enough
+    camMoveState.phase = 'idle';
+    camMoveState.smoothPt = null;
+    camMoveState.confirmStart = 0;
+    camMoveState.pinchFrames = 0;
+    lastPinchEndTime = performance.now();
+  }
+
   if (allUp) {
     camSaveState();
     cCtx.clearRect(0, 0, camDrawCanvas.width, camDrawCanvas.height);
@@ -1740,6 +2122,16 @@ function onHandResults(results) {
   }
 
   if (indexUp && !middleUp) {
+    // Don't draw if thumb is near index (approaching or leaving a pinch)
+    // or if we just finished a pinch (cooldown period)
+    if (pinchDist < PINCH_END_DIST || (performance.now() - lastPinchEndTime) < PINCH_DRAW_COOLDOWN) {
+      airEnd();
+      document.getElementById('drawDot').className = 'dot';
+      if (pinchDist < PINCH_END_DIST) {
+        document.getElementById('statusDraw').textContent = '🤏 ئامادەی گواستنەوە...';
+      }
+      return;
+    }
     // Save canvas state at start of a new stroke
     if (!airLastPt) { camSaveState(); }
     document.getElementById('drawDot').classList.add('drawing');
@@ -1797,7 +2189,7 @@ document.addEventListener('keydown', e => {
   if (k === '[') { state.size = Math.max(1, state.size - 2); document.getElementById('sizeSlider').value = state.size; updateBrushSetting(); return; }
   if (k === ']') { state.size = Math.min(100, state.size + 2); document.getElementById('sizeSlider').value = state.size; updateBrushSetting(); return; }
 
-  const map = { b:'brush',p:'pencil',m:'marker',a:'spray',n:'neon',c:'calligraphy',e:'eraser',f:'fill',l:'line',r:'rect',o:'circle',t:'text',i:'eyedrop',h:'pan' };
+  const map = { b:'brush',p:'pencil',m:'marker',a:'spray',n:'neon',c:'calligraphy',e:'eraser',f:'fill',l:'line',r:'rect',o:'circle',t:'text',i:'eyedrop',v:'move',h:'pan' };
   if (map[k]) { setTool(map[k]); return; }
   if (k === 'g') { toggleGrid(); return; }
   if (k === 's' && !e.ctrlKey) { toggleSymmetry(); return; }
