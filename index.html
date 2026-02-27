@@ -622,6 +622,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div><span class="key">Space+Drag</span> Pan</div>
       <div><span class="key">Ctrl+Wheel</span> Zoom</div>
       <div><span class="key">Del</span> Clear Layer</div>
+      <div style="grid-column:1/-1;margin-top:8px;font-weight:600;color:var(--ink);">🖐 ئاماژەی دەست (کامێرا)</div>
+      <div><span class="key">☝️</span> نووسین</div>
+      <div><span class="key">✌️</span> قەڵەم هەڵگیراوە</div>
+      <div><span class="key">🤟 ٣ پەنجە</span> گەڕانەوە (Undo)</div>
+      <div><span class="key">🤚 هەموو</span> پاککردنەوە</div>
     </div>
     <div class="modal-actions">
       <button class="modal-btn primary" onclick="closeModal('shortcutsModal')">باشە</button>
@@ -1607,6 +1612,24 @@ function importImage() {
 // ═══════════════════════════════════════════════════════════════
 let handsModel = null;
 let airLastPt = null;
+let lastUndoGestureTime = 0;
+let camUndoStack = [];
+const MAX_CAM_UNDO = 30;
+
+function camSaveState() {
+  if (!camDrawCanvas.width || !camDrawCanvas.height) return;
+  const cCtx = camDrawCanvas.getContext('2d');
+  camUndoStack.push(cCtx.getImageData(0, 0, camDrawCanvas.width, camDrawCanvas.height));
+  if (camUndoStack.length > MAX_CAM_UNDO) camUndoStack.shift();
+}
+
+function camUndo() {
+  if (!camUndoStack.length) return;
+  const imgData = camUndoStack.pop();
+  const cCtx = camDrawCanvas.getContext('2d');
+  cCtx.clearRect(0, 0, camDrawCanvas.width, camDrawCanvas.height);
+  cCtx.putImageData(imgData, 0, 0);
+}
 
 function toggleCamera() {
   if (state.cameraOn) {
@@ -1670,7 +1693,9 @@ function onHandResults(results) {
   const it = pt(lm[8]);
   const indexUp = lm[8].y < lm[6].y - 0.03;
   const middleUp = lm[12].y < lm[10].y - 0.03;
-  const allUp = lm[20].y < lm[17].y && lm[16].y < lm[14].y;
+  const ringUp = lm[16].y < lm[14].y - 0.03;
+  const pinkyUp = lm[20].y < lm[18].y - 0.03;
+  const allUp = pinkyUp && ringUp && middleUp && indexUp;
 
   // Fingertip indicator on full-screen hand canvas
   hCtx.beginPath(); hCtx.arc(it.x, it.y, 14, 0, Math.PI * 2);
@@ -1687,10 +1712,23 @@ function onHandResults(results) {
   const cCtx = camDrawCanvas.getContext('2d');
 
   if (allUp) {
+    camSaveState();
     cCtx.clearRect(0, 0, camDrawCanvas.width, camDrawCanvas.height);
     airEnd();
     document.getElementById('drawDot').className = 'dot';
     document.getElementById('statusDraw').textContent = '🤚 پاککردنەوە';
+    return;
+  }
+
+  if (indexUp && middleUp && ringUp && !pinkyUp) {
+    airEnd();
+    const now = Date.now();
+    if (now - lastUndoGestureTime > 1000) {
+      lastUndoGestureTime = now;
+      if (state.cameraOn) { camUndo(); } else { undo(); }
+    }
+    document.getElementById('drawDot').className = 'dot';
+    document.getElementById('statusDraw').textContent = '🤟 گەڕانەوە (Undo)';
     return;
   }
 
@@ -1702,6 +1740,8 @@ function onHandResults(results) {
   }
 
   if (indexUp && !middleUp) {
+    // Save canvas state at start of a new stroke
+    if (!airLastPt) { camSaveState(); }
     document.getElementById('drawDot').classList.add('drawing');
     document.getElementById('statusDraw').textContent = '☝️ نووسین...';
     if (airLastPt) {
